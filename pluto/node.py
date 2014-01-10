@@ -5,7 +5,28 @@ https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
 from pymongo import MongoClient
+from bson import ObjectId
+
 from .datastore import Datastore
+#from . import celeryconfig
+#from celery.contrib.methods import task
+from celery import Celery
+
+#app = Celery(__name__, broker='amqp://guest@localhost//')
+app = Celery()
+#app.config_from_object( celeryconfig )
+app.config_from_object( 'pluto.celeryconfig' )
+
+@app.task
+def run(node_id):
+  print 'RUNNING ', node_id
+  try:
+    node = Node.find( node_id )
+    print 'IS ', node
+  except Exception as e:
+    print 'FAIL ', e
+    import traceback
+    traceback.print_exc()
 
 __node_types__ = {}
 __node_backend__ = None
@@ -52,10 +73,17 @@ class Node(object):
     return '%s(%s)'%( type_str, self.configuration )
 
   @classmethod
-  def find(self, **kwargs):
+  def find(self, *args, **kwargs):
     '''
     Returns an iterator on nodes that match the conditions.
     '''
+    if len(args)==1 and isinstance(args[0], (str,unicode,ObjectId)):
+      return Node( __node_backend__.find_one(ObjectId(args[0])) )
+    else:
+      return self.find_iter(*args, **kwargs)
+
+  @classmethod
+  def find_iter(self, *args, **kwargs):
     for node in __node_backend__.find( **kwargs ):
       yield Node(node)
 
@@ -91,3 +119,10 @@ class Node(object):
       self.configuration['type'] = self.__class__.__name__
     self.backend.save( self.configuration )
     return self
+
+  def schedule(self):
+    '''Schedule this node to be run.'''
+    # TODO: if not saved, save now so that there's an id
+    #cereal = self.configuration.copy()
+    #cereal['_id'] = str(cereal['_id'])
+    run.delay( str(self.configuration['_id']) )

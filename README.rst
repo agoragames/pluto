@@ -30,6 +30,13 @@ You can clone the repository by doing the following::
     $ cd pluto
     $ pip install -r development.pip
 
+Execution
+=========
+
+To run the celery worker using predefined worker parameters: ::
+
+    $ celery worker --config pluto.celeryconfig
+
 Tests
 =====
 

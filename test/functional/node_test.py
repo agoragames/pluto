@@ -2,6 +2,10 @@
 from chai import Chai
 from pluto.node import Node
 
+class ScheduleTest(Node):
+  def run(self):
+    print 'run schedule test'
+
 class NodeTest(Chai):
 
   def setUp(self):
@@ -33,3 +37,8 @@ class NodeTest(Chai):
     assert_equals( 2, len(res) )
     assert_equals( node.id, res[1].id )
     assert_true( isinstance(res[1], ClassLoadTest) )
+
+  def test_schedule(self):
+
+    node = ScheduleTest().save()
+    node.schedule()
