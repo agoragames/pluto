@@ -26,7 +26,9 @@ Using the development version
 
 You can clone the repository by doing the following::
 
-    $ git clone git://github.com/agoragames/chai.git
+    $ git clone git://github.com/agoragames/pluto.git
+    $ cd pluto
+    $ pip install -r development.txt
 
 Tests
 =====

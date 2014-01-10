@@ -14,8 +14,8 @@ class NodeType(type):
   def __init__(self, name, bases, dct):
     global __node_types__
     super(NodeType,self).__init__(name, bases, dct)
-  
-    if name.endswith('Node') and not name.startswith('Node'):
+ 
+    if globals().get('Node') in bases:
       __node_types__[name] = self
 
   @property
@@ -45,6 +45,11 @@ class Node(object):
 
     # TODO: initialize input and output, or lazy on property read?
 
+  def __str__(self):
+    '''String version of a node.'''
+    type_str = self.configuration.get('type', 'Node')
+    return '%s(%s)'%( type_str, self.configuration )
+
   @classmethod
   def find(self, **kwargs):
     '''
@@ -62,7 +67,8 @@ class Node(object):
     return self.configuration.get('_id')
 
   def save(self):
-    if 'type' not in self.configuration and issubclass(self.__class__,Node):
-      print 'saving ', self.__class__.__name__
+    # TODO also block saving nodes with an unknown type?
+    if 'type' not in self.configuration and self.__class__ is not Node:
       self.configuration['type'] = self.__class__.__name__
     self.backend.save( self.configuration )
+    return self

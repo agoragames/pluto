@@ -19,8 +19,17 @@ class NodeTest(Chai):
     n.save()
     assert_equals( 1, len(list(n.find())) )
 
-  def test_node_loads_the_right_class(self):
+  def test_find_loads_the_right_class(self):
     class ClassLoadTest(Node): pass
 
-    Node({'type':'ClassLoadTest'}).save()
-    print list(n.find())
+    node = Node({'type':'ClassLoadTest', 'foo':'bar'}).save()
+    res = list(Node.find())
+    assert_equals( 1, len(res) )
+    assert_equals( node.id, res[0].id )
+    assert_true( isinstance(res[0], ClassLoadTest) )
+
+    node = ClassLoadTest().save()
+    res = list(Node.find())
+    assert_equals( 2, len(res) )
+    assert_equals( node.id, res[1].id )
+    assert_true( isinstance(res[1], ClassLoadTest) )
