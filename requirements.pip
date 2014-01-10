@@ -1,0 +1,8 @@
+celery
+
+# supported data stores
+pymongo
+redis
+
+# timeseries support
+kairos

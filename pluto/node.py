@@ -4,7 +4,8 @@ Copyright (c) 2014, Aaron Westendorf All rights reserved.
 https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
-from pymongo import Connection
+from pymongo import MongoClient
+from .datastore import Datastore
 
 __node_types__ = {}
 __node_backend__ = None
@@ -25,7 +26,7 @@ class NodeType(type):
   @backend.setter
   def backend(self, config):
     global __node_backend__
-    __node_backend__ = Connection(**config)[ config.get('database','pluto') ][ 'nodes' ]
+    __node_backend__ = MongoClient(**config)[ config.get('database','pluto') ][ 'nodes' ]
 
 # TODO inherit from celery task?
 class Node(object):
@@ -57,6 +58,24 @@ class Node(object):
     '''
     for node in __node_backend__.find( **kwargs ):
       yield Node(node)
+
+  @property
+  def input(self):
+    if 'input' in self.configuration:
+      rval = getattr(self, '_input')
+      if not rval:
+        rval = self._input = Datastore( self.configuration['input'] )
+      return rval
+    return None
+
+  @property
+  def output(self):
+    if 'output' in self.configuration:
+      rval = getattr(self, '_output')
+      if not rval:
+        rval = self._output = Datastore( self.configuration['output'] )
+      return rval
+    return None
 
   @property
   def backend(self):
