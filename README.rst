@@ -37,6 +37,11 @@ To run the celery worker using predefined worker parameters: ::
 
     $ celery worker --config pluto.celeryconfig
 
+NOTE: at this time, you may need to run the worker with the ``PYTHONPATH``
+argument. ::
+
+    $ PYTHONPATH='.' celery worker --config pluto.celeryconfig
+
 Tests
 =====
 

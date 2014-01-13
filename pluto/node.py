@@ -4,26 +4,25 @@ Copyright (c) 2014, Aaron Westendorf All rights reserved.
 https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
+import importlib
+
 from pymongo import MongoClient
 from bson import ObjectId
 
 from .datastore import Datastore
-#from . import celeryconfig
-#from celery.contrib.methods import task
 from celery import Celery
 
-#app = Celery(__name__, broker='amqp://guest@localhost//')
+# Use the module name so that we don't have a circular load order
 app = Celery()
-#app.config_from_object( celeryconfig )
 app.config_from_object( 'pluto.celeryconfig' )
 
 @app.task
 def run(node_id):
-  print 'RUNNING ', node_id
   try:
     node = Node.find( node_id )
-    print 'IS ', node
+    node.run()
   except Exception as e:
+    # TODO: handle exceptions in a celery-friendly way
     print 'FAIL ', e
     import traceback
     traceback.print_exc()
@@ -36,7 +35,7 @@ class NodeType(type):
   def __init__(self, name, bases, dct):
     global __node_types__
     super(NodeType,self).__init__(name, bases, dct)
- 
+
     if globals().get('Node') in bases:
       __node_types__[name] = self
 
@@ -53,17 +52,26 @@ class NodeType(type):
 class Node(object):
   __metaclass__ = NodeType
   
-  def __new__(cls, configuration={}):
-    if cls==Node and 'type' in configuration:
+  def __new__(cls, config=None):
+    config = config or {}
+    if cls==Node and 'type' in config:
+      # try to load the module if it's defined
+      if config['type'] not in __node_types__ and config.get('module'):
+        # Use fromlist argument to load "foo.bar.hello.world". No need to
+        # do anything other than ensure that Node types have been defined.
+        __import__(config['module'], fromlist=[config['module']])
+
       # load a specific node based on the short name of the class
-      if configuration['type'] in __node_types__:
-        return __node_types__[ configuration['type'] ]( configuration )
+      if config['type'] in __node_types__:
+        return __node_types__[ config['type'] ]( config )
       else:
-        raise ImportError("Unsupported or unknown node type %s", configuration['type'])
-    return object.__new__(cls, configuration)
+        
+        raise ImportError("Unsupported or unknown node type %s", config['type'])
+    return object.__new__(cls, config)
   
-  def __init__(self, configuration={}):
-    self.configuration = configuration
+  def __init__(self, config=None):
+    config = config or {}
+    self.configuration = config
 
     # TODO: initialize input and output, or lazy on property read?
 
@@ -117,12 +125,13 @@ class Node(object):
     # TODO also block saving nodes with an unknown type?
     if 'type' not in self.configuration and self.__class__ is not Node:
       self.configuration['type'] = self.__class__.__name__
+      self.configuration['module'] = self.__class__.__module__
     self.backend.save( self.configuration )
     return self
 
   def schedule(self):
     '''Schedule this node to be run.'''
     # TODO: if not saved, save now so that there's an id
-    #cereal = self.configuration.copy()
-    #cereal['_id'] = str(cereal['_id'])
+    if '_id' not in self.configuration:
+      self.save()
     run.delay( str(self.configuration['_id']) )

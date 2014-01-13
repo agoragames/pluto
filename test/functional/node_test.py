@@ -39,6 +39,5 @@ class NodeTest(Chai):
     assert_true( isinstance(res[1], ClassLoadTest) )
 
   def test_schedule(self):
-
     node = ScheduleTest().save()
     node.schedule()
