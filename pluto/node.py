@@ -4,7 +4,7 @@ Copyright (c) 2014, Aaron Westendorf All rights reserved.
 https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
-import importlib
+from datetime import datetime
 
 from pymongo import MongoClient
 from bson import ObjectId
@@ -17,22 +17,30 @@ app = Celery()
 app.config_from_object( 'pluto.celeryconfig' )
 
 @app.task
-def run(node_id):
+def run(node_id, context_id=None):
   try:
     node = Node.find( node_id )
-    node.run()
+    if context_id:
+      context = Node.find( context_id )
+    else:
+      context = None
+    node.runit(context=context)
   except Exception as e:
-    # TODO: handle exceptions in a celery-friendly way
+    # TODO: handle exceptions in a celery-friendly way that also
+    # says a lot more about what happened
     print 'FAIL ', e
     import traceback
     traceback.print_exc()
 
   for other in Node:
+    # Recursion is a no-no
+    if other.id == node.id: continue
+
     for l in other.configuration.get('listen',[]):
       l_spec = l.copy()
       l_spec.setdefault('spec',{})['_id'] = node.id
       if Node.count( **l_spec ):
-        other.schedule()
+        other.schedule( context=node )
 
 __node_types__ = {}
 __node_backend__ = None
@@ -104,6 +112,18 @@ class Node(object):
       return Node( __node_backend__.find_one(ObjectId(args[0])) )
     else:
       return self.find_iter(*args, **kwargs)
+
+  @classmethod
+  def find_one(self, spec_or_id=None):
+    '''
+    Return a single node or None.
+    '''
+    if isinstance(spec_or_id, (str,unicode)):
+      spec_or_id = ObjectId(spec_or_id)
+    res = __node_backend__.find_one(spec_or_id)
+    if res:
+      return Node(res)
+    return None
   
   @classmethod
   def count(self, *args, **kwargs):
@@ -116,21 +136,17 @@ class Node(object):
 
   @property
   def input(self):
-    if 'input' in self.configuration:
-      rval = getattr(self, '_input', None)
-      if not rval:
-        rval = self._input = Datastore( self, self.configuration['input'] )
-      return rval
-    return None
+    rval = getattr(self, '_input', None)
+    if not rval and 'input' in self.configuration:
+      rval = self._input = Datastore( self, self.configuration['input'] )
+    return rval
 
   @property
   def output(self):
-    if 'output' in self.configuration:
-      rval = getattr(self, '_output', None)
-      if not rval:
-        rval = self._output = Datastore( self, self.configuration['output'] )
-      return rval
-    return None
+    rval = getattr(self, '_output', None)
+    if not rval and 'output' in self.configuration:
+      rval = self._output = Datastore( self, self.configuration['output'] )
+    return rval
 
   @property
   def backend(self):
@@ -140,6 +156,10 @@ class Node(object):
   def id(self):
     return self.configuration.get('_id')
 
+  @property
+  def name(self):
+    return self.__class__.__name__
+
   def save(self):
     # TODO also block saving nodes with an unknown type?
     if 'type' not in self.configuration and self.__class__ is not Node:
@@ -148,9 +168,38 @@ class Node(object):
     self.backend.save( self.configuration )
     return self
 
-  def schedule(self):
+  def schedule(self, context=None):
     '''Schedule this node to be run.'''
     # TODO: if not saved, save now so that there's an id
     if '_id' not in self.configuration:
       self.save()
-    run.delay( str(self.configuration['_id']) )
+    if context:
+      if '_id' not in context.configuration:
+        context.save()
+      context = str(context.configuration['_id'])
+    
+    # singleton support
+    # TODO: make this so that bugs don't prevent from ever running, i.e.
+    # that run_at never gets updated for whatever reason.
+    if not self.configuration.get('schedule_at'):
+      self.configuration['schedule_at'] = datetime.utcnow()
+      self.save()
+    elif self.configuration.get('run_at', datetime.fromtimestamp(0)) >= self.configuration['schedule_at']:
+      self.configuration['schedule_at'] = datetime.utcnow()
+      self.save()
+    else:
+      return self
+   
+    # TODO: support apply_async with countdown and/or ETA args 
+    run.delay( str(self.configuration['_id']), context_id=context )
+    return self
+
+  def runit(self, context=None):
+    '''Wrapper around running the node's analysis.'''
+    if self.input == None and context:
+      self._input = context.output
+    self.configuration['run_at'] = datetime.utcnow()
+    self.save()
+
+    self.run()
+    return self

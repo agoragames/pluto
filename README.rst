@@ -51,6 +51,11 @@ Use `nose <https://github.com/nose-devs/nose/>`_ to run the test suite. ::
 
 The tests require a local MongoDB instance running on the standard port.
 
+Issues
+======
+
+See https://github.com/agoragames/pluto/issues.
+
 License
 =======
 
