@@ -5,13 +5,12 @@ https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
 from pymongo import MongoClient
-from .input import Input
+from .datastore import Datastore
 
-class Mongo(Input):
+class Mongo(Datastore):
 
   def _init_client(self):
-    self._client = MongoClient(**self.configuration)[ \
-      config.get('database', 'pluto') ][ \
-      config.get('collection', 'input') ]
-
-  # TODO: finder API
+    # TODO: support more options
+    db = self.configuration.pop('db', 'pluto')
+    collection = self.configuration.pop('collection', 'data') # TODO: figure this out better
+    self._client = MongoClient(**self.configuration)[db][collection]

@@ -16,22 +16,26 @@ class DatastoreType(type):
  
     if globals().get('Datastore') in bases:
       __datastore_types__[name] = self
+      __datastore_types__[name.lower()] = self
 
 class Datastore(object):
   __metaclass__ = DatastoreType
   
-  def __new__(cls, configuration={}):
-    if cls==Datastore and 'type' in configuration:
+  def __new__(cls, node, configuration={}):
+    d_type = configuration.pop('type', None)
+    if cls==Datastore and d_type:
       # load a specific datastore based on the short name of the class
-      if configuration['type'] in __datastore_types__:
-        return __datastore_types__[ configuration['type'] ]( configuration )
+      if d_type in __datastore_types__:
+        return __datastore_types__[ d_type ].__new__(__datastore_types__[d_type], node, configuration)
       else:
         raise ImportError("Unsupported or unknown datastore type %s", configuration['type'])
     return object.__new__(cls, configuration)
   
-  def __init__(self, configuration={}):
+  def __init__(self, node, configuration={}):
+    self._node = node
     self.configuration = configuration
     self._client = None
+    self._init_client()
 
   def _init_client(self):
     '''Hook for subclasses to initialize the client.'''

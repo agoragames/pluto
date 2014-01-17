@@ -5,3 +5,4 @@ https://github.com/agoragames/pluto/blob/master/LICENSE.txt
 '''
 
 from .datastore import Datastore
+from .mongo import Mongo

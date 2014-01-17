@@ -27,6 +27,13 @@ def run(node_id):
     import traceback
     traceback.print_exc()
 
+  for other in Node:
+    for l in other.configuration.get('listen',[]):
+      l_spec = l.copy()
+      l_spec.setdefault('spec',{})['_id'] = node.id
+      if Node.count( **l_spec ):
+        other.schedule()
+
 __node_types__ = {}
 __node_backend__ = None
 
@@ -48,6 +55,10 @@ class NodeType(type):
     global __node_backend__
     __node_backend__ = MongoClient(**config)[ config.get('database','pluto') ][ 'nodes' ]
 
+  def __iter__(self):
+    for node in __node_backend__.find():
+      yield Node(node)
+
 # TODO inherit from celery task?
 class Node(object):
   __metaclass__ = NodeType
@@ -63,7 +74,7 @@ class Node(object):
 
       # load a specific node based on the short name of the class
       if config['type'] in __node_types__:
-        return __node_types__[ config['type'] ]( config )
+        return __node_types__[ config['type'] ].__new__(__node_types__[config['type']], config)
       else:
         
         raise ImportError("Unsupported or unknown node type %s", config['type'])
@@ -72,6 +83,10 @@ class Node(object):
   def __init__(self, config=None):
     config = config or {}
     self.configuration = config
+    
+    if 'type' not in self.configuration and self.__class__ is not Node:
+      self.configuration['type'] = self.__class__.__name__
+      self.configuration['module'] = self.__class__.__module__
 
     # TODO: initialize input and output, or lazy on property read?
 
@@ -89,6 +104,10 @@ class Node(object):
       return Node( __node_backend__.find_one(ObjectId(args[0])) )
     else:
       return self.find_iter(*args, **kwargs)
+  
+  @classmethod
+  def count(self, *args, **kwargs):
+    return __node_backend__.find( **kwargs ).count()
 
   @classmethod
   def find_iter(self, *args, **kwargs):
@@ -98,18 +117,18 @@ class Node(object):
   @property
   def input(self):
     if 'input' in self.configuration:
-      rval = getattr(self, '_input')
+      rval = getattr(self, '_input', None)
       if not rval:
-        rval = self._input = Datastore( self.configuration['input'] )
+        rval = self._input = Datastore( self, self.configuration['input'] )
       return rval
     return None
 
   @property
   def output(self):
     if 'output' in self.configuration:
-      rval = getattr(self, '_output')
+      rval = getattr(self, '_output', None)
       if not rval:
-        rval = self._output = Datastore( self.configuration['output'] )
+        rval = self._output = Datastore( self, self.configuration['output'] )
       return rval
     return None
 
